@@ -1,0 +1,118 @@
+name: 🚀 Advanced CI Pipeline
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-fg4ge4
+  cancel-in-progress: true
+
+env:
+  PY_COLORS: "1"
+  PYTHON_VERSION: "3.13"
+  CHROME_DRIVER_VERSION: "latest"
+
+jobs:
+  build:
+    name: 🔨 Build & Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        python-version: ["3.13"]
+
+    steps:
+      # Checkout code
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      # Setup Python environment
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      # Configure system locale
+      - name: 🌍 Configure System Locale
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tzdata locales
+          sudo locale-gen en_US.UTF-8
+          sudo localectl set-locale LANG="en_US.UTF-8"
+          export LANG="en_US.UTF-8"
+          sudo update-locale
+          echo "Locale configuration complete:"
+          locale
+
+      # Install Python dependencies
+      - name: 📦 Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install \
+            seleniumbase \
+            pyautogui \
+            pymongo \
+            python-xlib
+
+      # Install Chrome
+      - name: 🌐 Install Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      # Verify CLI tools
+      - name: ✅ Verify Console Scripts
+        run: |
+          seleniumbase --version
+          sbase --version || true
+
+      # Install WebDriver
+      - name: 🛠️ Install ChromeDriver
+        run: |
+          seleniumbase install chromedriver
+
+      # Setup Cloudflare WARP
+      - name: 🔐 Install & Configure Cloudflare WARP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
+          
+          # Add Cloudflare repository
+          curl https://pkg.cloudflareclient.com/pubkey.gpg | \
+            sudo gpg --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | \
+            sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          
+          # Install WARP client
+          sudo apt-get update
+          sudo apt-get install -y cloudflare-warp
+          
+          # Configure WARP
+          sudo warp-cli --accept-tos registration new
+          sudo warp-cli --accept-tos connect
+          sleep 5
+          sudo warp-cli --accept-tos status
+
+      # Run main test script
+      - name: 🧪 Execute Test Suite
+        run: |
+          python drt.py --debug --chrome --xvfb --screenshot
+
+      # Upload test artifacts
+      - name: 📸 Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_id }}
+          path: ./latest_logs/
+          retention-days: 30
+          if-no-files-found: warn
