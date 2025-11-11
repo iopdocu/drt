@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-pipeline-${{ github.ref }}
+  group: ci-pipeline-x
   cancel-in-progress: true
 
 env:
