@@ -1,4 +1,4 @@
-rom seleniumbase import SB
+from seleniumbase import SB
 import time
 import requests
 import sys
